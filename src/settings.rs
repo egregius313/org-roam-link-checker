@@ -108,7 +108,7 @@ impl SettingsBuilder {
     }
 }
 
-pub(crate) fn find_ignore_file() -> Option<PathBuf> {
+fn find_ignore_file() -> Option<PathBuf> {
     let mut path = current_dir().ok()?;
     loop {
         for name in [".link-checker.yml", ".link_checker.yml"] {
@@ -122,15 +122,15 @@ pub(crate) fn find_ignore_file() -> Option<PathBuf> {
 }
 
 #[derive(Deserialize, Default)]
-pub(crate) struct Config {
+struct Config {
     #[serde(default)]
-    pub(crate) ignored_paths: Vec<PathBuf>,
+    ignored_paths: Vec<PathBuf>,
     #[serde(rename = "roam-db", default)]
-    pub(crate) roam_db: Option<PathBuf>,
+    roam_db: Option<PathBuf>,
 }
 
 impl Config {
-    pub(crate) fn from_file<P: AsRef<Path>>(file: P) -> anyhow::Result<Self> {
+    fn from_file<P: AsRef<Path>>(file: P) -> anyhow::Result<Self> {
         let path = file.as_ref();
         let file = File::open(path)?;
         let mut config: Self = from_reader(file)?;

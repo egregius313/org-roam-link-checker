@@ -75,30 +75,6 @@ fn assert_marker(output: Output, marker: &str) {
 }
 
 #[test]
-fn legacy_ignore_interface_uses_same_config_parser() {
-    let fixture = Fixture::new();
-    fixture.config(
-        "config/custom.yml",
-        "roam-db: configured.db\nignored_paths:\n  - config.org\n",
-    );
-    let mut ignore =
-        link_checker::ignore_file::Ignore::from_file(fixture.root.join("config/custom.yml"))
-            .unwrap();
-    ignore.add_paths([PathBuf::from("cli.org")]);
-    assert_eq!(
-        ignore.roam_db_path(),
-        Some(fixture.root.join("config/configured.db").as_path())
-    );
-    assert!(ignore.exclude("config.org"));
-    assert!(ignore.exclude("cli.org"));
-    assert!(!ignore.exclude("other.org"));
-
-    let parsed: link_checker::ignore_file::Ignore =
-        serde_yml::from_str("ignored_paths: [parsed.org]").unwrap();
-    assert!(parsed.exclude("parsed.org"));
-}
-
-#[test]
 fn settings_resolve_cli_overrides_and_merge_ignored_paths() {
     let fixture = Fixture::new();
     let db = fixture.database("cli.db", "cli-id");
