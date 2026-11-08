@@ -1,8 +1,11 @@
 # link-checker
 
 Checks an Org-roam SQLite database for broken file links and IDs that do not
-correspond to a node in the database. It reads the database rather than scanning
-Org files directly, so sync the Org-roam database before running it.
+correspond to a node in the database.
+
+> [!WARNING]
+> Links are checked against the database rather than scanning Org files
+> directly, so sync the Org-roam database before running it. (`M-x org-roam-db-sync`)
 
 ## Usage
 
