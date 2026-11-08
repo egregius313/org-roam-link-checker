@@ -113,8 +113,65 @@ fn explicit_config_supports_roam_db_and_ignored_paths_together() {
     );
 
     assert_marker(
-        fixture.run(&fixture.root, &["-i", "config/custom.yml"]),
+        fixture.run(&fixture.root, &["--config", "config/custom.yml"]),
         "config-id",
+    );
+}
+
+#[test]
+fn command_line_ignore_paths_extend_configured_paths() {
+    let fixture = Fixture::new();
+    let db = fixture.database("config/configured.db", "config-id");
+    let conn = Connection::open(db).unwrap();
+    for path in ["config.org", "short.org", "long.org", "reported.org"] {
+        conn.execute(
+            "INSERT INTO links VALUES (?1, ?2, ?3)",
+            params!["source", "\"file\"", format!("\"{path}\"")],
+        )
+        .unwrap();
+    }
+    fixture.config(
+        "config/custom.yml",
+        "roam-db: configured.db\nignored_paths:\n  - config.org\n",
+    );
+    let args = [
+        "--config",
+        "config/custom.yml",
+        "-i",
+        "short.org",
+        "--ignore",
+        "long.org",
+    ];
+    let output = fixture.run(&fixture.root, &args);
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("reported.org"));
+    assert!(!stdout.contains("config.org"));
+    assert!(!stdout.contains("short.org"));
+    assert!(!stdout.contains("long.org"));
+
+    let mut args = args.to_vec();
+    args.extend(["-i", "reported.org"]);
+    assert_marker(fixture.run(&fixture.root, &args), "config-id");
+}
+
+#[test]
+fn command_line_ignore_works_without_a_config_file() {
+    let fixture = Fixture::new();
+    let db = fixture.database("configured.db", "id");
+    let conn = Connection::open(db).unwrap();
+    conn.execute(
+        "INSERT INTO links VALUES (?1, ?2, ?3)",
+        params!["source", "\"file\"", "\"missing.org\""],
+    )
+    .unwrap();
+
+    assert_marker(
+        fixture.run(
+            &fixture.root,
+            &["--roam-db", "configured.db", "--ignore", "missing.org"],
+        ),
+        "id",
     );
 }
 
@@ -152,7 +209,7 @@ fn missing_configured_database_does_not_fall_back_or_create_a_file() {
     fixture.database(".emacs.d/.local/cache/org-roam.db", "default-id");
     fixture.config("config/custom.yml", "roam-db: missing.db\n");
 
-    let output = fixture.run(&fixture.root, &["-i", "config/custom.yml"]);
+    let output = fixture.run(&fixture.root, &["--config", "config/custom.yml"]);
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("missing.db"));
     assert!(!fixture.root.join("config/missing.db").exists());
@@ -165,7 +222,7 @@ fn absolute_database_path_in_config_is_used_directly() {
     fixture.config("config/custom.yml", &format!("roam-db: {}\n", db.display()));
 
     assert_marker(
-        fixture.run(&fixture.root, &["-i", "config/custom.yml"]),
+        fixture.run(&fixture.root, &["--config", "config/custom.yml"]),
         "absolute-id",
     );
 }

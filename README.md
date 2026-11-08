@@ -7,7 +7,7 @@ Org files directly, so sync the Org-roam database before running it.
 ## Usage
 
 ```text
-link-checker [--roam-db <db-path>] [-i <ignore-file>]
+link-checker [--roam-db <db-path>] [--config <config-file>] [-i <path>]...
 ```
 
 The executable can be built and run with Cargo. Building requires Rust (edition
@@ -37,10 +37,8 @@ names exist in the same directory, `.link-checker.yml` takes precedence.
 Alternatively, specify a file explicitly:
 
 ```sh
-link-checker -i ../.link-checker.yml
+link-checker --config ../.link-checker.yml
 ```
-
-The long form is `--ignore-file-path`.
 
 An explicit path is relative to the current working directory. If no file is
 found, or the selected file cannot be read or parsed, the checker silently uses
@@ -77,4 +75,11 @@ not canonicalized, and `~` and environment variables are not expanded. Use the
 same relative or absolute destination form as the link. Ignoring a file path
 does not suppress unknown-ID reports.
 
-For an empty list, use `ignored_paths: []`.
+For an empty list, use `ignored_paths: []`. To add individual ignored paths
+on the command line, use `-i <path>` or `--ignore <path>`. Repeat the option
+to add more paths; these are combined with any paths in the configuration file.
+For example:
+
+```sh
+link-checker -i missing-document.pdf --ignore ../shared/optional.org
+```

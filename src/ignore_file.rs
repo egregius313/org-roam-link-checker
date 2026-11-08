@@ -31,6 +31,10 @@ impl Ignore {
         self.roam_db.as_deref()
     }
 
+    pub fn add_paths<I: IntoIterator<Item = PathBuf>>(&mut self, paths: I) {
+        self.ignored_paths.extend(paths);
+    }
+
     pub fn exclude<P: AsRef<Path>>(&self, path: P) -> bool {
         for ignored_path in &self.ignored_paths {
             if ignored_path == path.as_ref() {

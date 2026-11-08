@@ -93,24 +93,30 @@ struct Args {
     #[arg(long = "roam-db")]
     org_roam_db: Option<PathBuf>,
 
-    /// Path to the ignore file
-    #[arg(short, long)]
-    ignore_file_path: Option<PathBuf>,
+    /// Path to the configuration file
+    #[arg(long)]
+    config: Option<PathBuf>,
+
+    /// File-link destination to ignore (may be specified multiple times)
+    #[arg(short = 'i', long = "ignore")]
+    ignored_paths: Vec<PathBuf>,
 }
 
 fn main() -> anyhow::Result<()> {
     let Args {
         org_roam_db,
-        ignore_file_path,
+        config,
+        ignored_paths,
     } = Args::parse();
 
-    let ignore = {
+    let mut ignore = {
         use link_checker::ignore_file::{Ignore, find_ignore_file};
-        ignore_file_path
+        config
             .or_else(find_ignore_file)
             .and_then(|path| Ignore::from_file(path).ok())
             .unwrap_or_default()
     };
+    ignore.add_paths(ignored_paths);
 
     let db_path = match org_roam_db.or_else(|| ignore.roam_db_path().map(PathBuf::from)) {
         Some(path) => path,
