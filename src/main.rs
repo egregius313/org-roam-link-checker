@@ -1,7 +1,7 @@
 use std::env::home_dir;
 use std::path::PathBuf;
 
-use anyhow::{Context, ensure};
+use anyhow::{ensure, Context};
 use clap::Parser;
 use link_checker::RoamFile;
 
@@ -67,6 +67,8 @@ struct MissingId {
     ref_id: String,
 }
 
+/// Find id: links which reference an id which is not contained within the
+/// org-roam database.
 fn external_ids(conn: &rusqlite::Connection) -> anyhow::Result<Vec<MissingId>> {
     let mut stmt = conn.prepare(
         r#"
@@ -94,7 +96,7 @@ struct Args {
     org_roam_db: Option<PathBuf>,
 
     /// Path to the configuration file
-    #[arg(long)]
+    #[arg(long, short)]
     config: Option<PathBuf>,
 
     /// File-link destination to ignore (may be specified multiple times)
@@ -110,7 +112,7 @@ fn main() -> anyhow::Result<()> {
     } = Args::parse();
 
     let mut ignore = {
-        use link_checker::ignore_file::{Ignore, find_ignore_file};
+        use link_checker::ignore_file::{find_ignore_file, Ignore};
         config
             .or_else(find_ignore_file)
             .and_then(|path| Ignore::from_file(path).ok())
