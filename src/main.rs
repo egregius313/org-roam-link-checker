@@ -1,7 +1,7 @@
 use std::env::home_dir;
 use std::path::PathBuf;
 
-use anyhow::ensure;
+use anyhow::{Context, ensure};
 use clap::Parser;
 use link_checker::RoamFile;
 
@@ -100,20 +100,32 @@ struct Args {
 
 fn main() -> anyhow::Result<()> {
     let Args {
-        ignore_file_path, ..
+        org_roam_db,
+        ignore_file_path,
     } = Args::parse();
 
     let ignore = {
-        use link_checker::ignore_file::{find_ignore_file, Ignore};
+        use link_checker::ignore_file::{Ignore, find_ignore_file};
         ignore_file_path
-            .or_else(|| find_ignore_file())
+            .or_else(find_ignore_file)
             .and_then(|path| Ignore::from_file(path).ok())
             .unwrap_or_default()
     };
 
-    let db_path = resolve_org_roam_db_path()?;
-
-    let conn = rusqlite::Connection::open(db_path)?;
+    let db_path = match org_roam_db.or_else(|| ignore.roam_db_path().map(PathBuf::from)) {
+        Some(path) => path,
+        None => resolve_org_roam_db_path()?,
+    };
+    ensure!(
+        db_path.exists(),
+        "Org-roam database not found: {}",
+        db_path.display()
+    );
+    let conn = rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
+    )
+    .with_context(|| format!("Could not open Org-roam database: {}", db_path.display()))?;
 
     let references = get_references(&conn)?;
 
