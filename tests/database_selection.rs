@@ -75,6 +75,63 @@ fn assert_marker(output: Output, marker: &str) {
 }
 
 #[test]
+fn legacy_ignore_interface_uses_same_config_parser() {
+    let fixture = Fixture::new();
+    fixture.config(
+        "config/custom.yml",
+        "roam-db: configured.db\nignored_paths:\n  - config.org\n",
+    );
+    let mut ignore =
+        link_checker::ignore_file::Ignore::from_file(fixture.root.join("config/custom.yml"))
+            .unwrap();
+    ignore.add_paths([PathBuf::from("cli.org")]);
+    assert_eq!(
+        ignore.roam_db_path(),
+        Some(fixture.root.join("config/configured.db").as_path())
+    );
+    assert!(ignore.exclude("config.org"));
+    assert!(ignore.exclude("cli.org"));
+    assert!(!ignore.exclude("other.org"));
+
+    let parsed: link_checker::ignore_file::Ignore =
+        serde_yml::from_str("ignored_paths: [parsed.org]").unwrap();
+    assert!(parsed.exclude("parsed.org"));
+}
+
+#[test]
+fn settings_resolve_cli_overrides_and_merge_ignored_paths() {
+    let fixture = Fixture::new();
+    let db = fixture.database("cli.db", "cli-id");
+    let config = fixture.root.join("config/custom.yml");
+    fixture.config(
+        "config/custom.yml",
+        "roam-db: config.db\nignored_paths:\n  - config.org\n",
+    );
+    let settings = link_checker::settings::Settings::load(
+        Some(db.clone()),
+        Some(config),
+        vec!["cli.org".into()],
+    )
+    .unwrap();
+
+    assert_eq!(settings.roam_db(), db);
+    assert!(settings.exclude("config.org"));
+    assert!(settings.exclude("cli.org"));
+    assert!(!settings.exclude("other.org"));
+}
+
+#[test]
+fn settings_resolve_config_database_relative_to_its_file() {
+    let fixture = Fixture::new();
+    let db = fixture.database("config/configured.db", "config-id");
+    let config = fixture.root.join("config/custom.yml");
+    fixture.config("config/custom.yml", "roam-db: configured.db\n");
+
+    let settings = link_checker::settings::Settings::load(None, Some(config), vec![]).unwrap();
+    assert_eq!(settings.roam_db(), db);
+}
+
+#[test]
 fn command_line_overrides_config_and_default() {
     let fixture = Fixture::new();
     fixture.database(".emacs.d/.local/cache/org-roam.db", "default-id");
@@ -234,6 +291,58 @@ fn ignore_only_config_preserves_default_database() {
     fixture.config(".link_checker.yml", "ignored_paths: []\n");
 
     assert_marker(fixture.run(&fixture.root, &[]), "default-id");
+}
+
+#[test]
+fn unreadable_explicit_config_uses_defaults_without_discovery() {
+    let fixture = Fixture::new();
+    fixture.database(".emacs.d/.local/cache/org-roam.db", "default-id");
+    fixture.database("configured.db", "config-id");
+    fixture.config(".link-checker.yml", "roam-db: configured.db\n");
+
+    assert_marker(
+        fixture.run(&fixture.root, &["--config", "missing.yml"]),
+        "default-id",
+    );
+}
+
+#[test]
+fn malformed_explicit_config_keeps_command_line_overrides() {
+    let fixture = Fixture::new();
+    let db = fixture.database("cli.db", "cli-id");
+    let conn = Connection::open(db).unwrap();
+    conn.execute(
+        "INSERT INTO links VALUES (?1, ?2, ?3)",
+        params!["source", "\"file\"", "\"missing.org\""],
+    )
+    .unwrap();
+    fixture.config("bad.yml", "ignored_paths: [invalid\n");
+
+    assert_marker(
+        fixture.run(
+            &fixture.root,
+            &[
+                "--config",
+                "bad.yml",
+                "--roam-db",
+                "cli.db",
+                "-i",
+                "missing.org",
+            ],
+        ),
+        "cli-id",
+    );
+}
+
+#[test]
+fn malformed_discovered_config_uses_defaults_without_searching_parents() {
+    let fixture = Fixture::new();
+    fixture.database(".emacs.d/.local/cache/org-roam.db", "default-id");
+    fixture.database("configured.db", "config-id");
+    fixture.config(".link-checker.yml", "roam-db: configured.db\n");
+    fixture.config("nested/.link-checker.yml", "ignored_paths: [invalid\n");
+
+    assert_marker(fixture.run(&fixture.root.join("nested"), &[]), "default-id");
 }
 
 #[test]

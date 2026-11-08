@@ -1,42 +1,40 @@
-use std::env::current_dir;
-use std::fs::File;
+//! Compatibility interface for callers using the original ignore-file module.
+//! New code should use [`crate::settings::Settings`].
+
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
-use serde_yml::from_reader;
+use serde::{Deserialize, Deserializer};
 
-#[derive(Deserialize, Default)]
+use crate::settings::Config;
+
+#[derive(Default)]
 pub struct Ignore {
-    #[serde(default)]
-    ignored_paths: Vec<PathBuf>,
-    #[serde(rename = "roam-db", default)]
-    roam_db: Option<PathBuf>,
+    config: Config,
+}
+
+impl<'de> Deserialize<'de> for Ignore {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Config::deserialize(deserializer).map(|config| Self { config })
+    }
 }
 
 impl Ignore {
     pub fn from_file<P: AsRef<Path>>(file: P) -> anyhow::Result<Self> {
-        let path = file.as_ref();
-        let file = File::open(path)?;
-        let mut ignore: Self = from_reader(file)?;
-        if let Some(db_path) = ignore.roam_db.as_mut().filter(|path| path.is_relative()) {
-            *db_path = path
-                .parent()
-                .unwrap_or_else(|| Path::new(""))
-                .join(&*db_path);
-        }
-        Ok(ignore)
+        Ok(Self {
+            config: Config::from_file(file)?,
+        })
     }
 
     pub fn roam_db_path(&self) -> Option<&Path> {
-        self.roam_db.as_deref()
+        self.config.roam_db.as_deref()
     }
 
     pub fn add_paths<I: IntoIterator<Item = PathBuf>>(&mut self, paths: I) {
-        self.ignored_paths.extend(paths);
+        self.config.ignored_paths.extend(paths);
     }
 
     pub fn exclude<P: AsRef<Path>>(&self, path: P) -> bool {
-        for ignored_path in &self.ignored_paths {
+        for ignored_path in &self.config.ignored_paths {
             if ignored_path == path.as_ref() {
                 return true;
             }
@@ -46,15 +44,5 @@ impl Ignore {
 }
 
 pub fn find_ignore_file() -> Option<PathBuf> {
-    let mut path = current_dir().ok()?;
-
-    loop {
-        for name in [".link-checker.yml", ".link_checker.yml"] {
-            let config = path.join(name);
-            if config.exists() {
-                return Some(config);
-            }
-        }
-        path = path.parent()?.to_owned();
-    }
+    crate::settings::find_ignore_file()
 }

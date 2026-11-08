@@ -1,24 +1,8 @@
-use std::env::home_dir;
 use std::path::PathBuf;
 
-use anyhow::{ensure, Context};
+use anyhow::Context;
 use clap::Parser;
-use link_checker::RoamFile;
-
-pub fn resolve_org_roam_db_path() -> anyhow::Result<std::path::PathBuf> {
-    let emacs_cache = home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?
-        .join(".emacs.d")
-        .join(".local")
-        .join("cache");
-    let db_path = emacs_cache.join("org-roam.db");
-    ensure!(
-        db_path.exists(),
-        "Org-roam database not found at expected location: {}",
-        db_path.display()
-    );
-    Ok(db_path)
-}
+use link_checker::{RoamFile, settings::Settings};
 
 struct Reference {
     source: PathBuf,
@@ -26,8 +10,8 @@ struct Reference {
 }
 
 impl Reference {
-    fn verify(&self, ignore: &link_checker::ignore_file::Ignore) -> bool {
-        if ignore.exclude(&self.referenced) {
+    fn verify(&self, settings: &Settings) -> bool {
+        if settings.exclude(&self.referenced) {
             return true;
         }
         if self.referenced.is_absolute() {
@@ -111,35 +95,17 @@ fn main() -> anyhow::Result<()> {
         ignored_paths,
     } = Args::parse();
 
-    let mut ignore = {
-        use link_checker::ignore_file::{find_ignore_file, Ignore};
-        config
-            .or_else(find_ignore_file)
-            .and_then(|path| Ignore::from_file(path).ok())
-            .unwrap_or_default()
-    };
-    ignore.add_paths(ignored_paths);
-
-    let db_path = match org_roam_db.or_else(|| ignore.roam_db_path().map(PathBuf::from)) {
-        Some(path) => path,
-        None => resolve_org_roam_db_path()?,
-    };
-    ensure!(
-        db_path.exists(),
-        "Org-roam database not found: {}",
-        db_path.display()
-    );
-    let conn = rusqlite::Connection::open_with_flags(
-        &db_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
-    )
-    .with_context(|| format!("Could not open Org-roam database: {}", db_path.display()))?;
+    let settings = Settings::load(org_roam_db, config, ignored_paths)?;
+    let db_path = settings.roam_db();
+    let conn =
+        rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)
+            .with_context(|| format!("Could not open Org-roam database: {}", db_path.display()))?;
 
     let references = get_references(&conn)?;
 
     let mut failed = false;
     for reference in references {
-        if !reference.verify(&ignore) {
+        if !reference.verify(&settings) {
             println!(
                 "Broken link: {} -> {}",
                 reference.source.display(),
