@@ -6,12 +6,12 @@ Org files directly, so sync the Org-roam database before running it.
 
 ## Usage
 
-Requires Rust (edition 2024) and a SQLite development library. From this
-directory, run:
-
-```sh
-cargo run --release
+```text
+link-checker [--roam-db <db-path>] [-i <ignore-file>]
 ```
+
+The executable can be built and run with Cargo. Building requires Rust (edition
+2024) and a SQLite development library.
 
 The checker expects the database at `~/.emacs.d/.local/cache/org-roam.db`.
 Although `--roam-db <PATH>` is accepted by the CLI, it is currently ignored;
@@ -30,9 +30,10 @@ looks in the current working directory, then each parent directory, and uses the
 first file found. Alternatively, specify a file explicitly:
 
 ```sh
-cargo run --release -- --ignore-file-path ../.link_checker.yml
-# Short form: -i ../.link_checker.yml
+link-checker -i ../.link_checker.yml
 ```
+
+The long form is `--ignore-file-path`.
 
 An explicit path is relative to the current working directory. If no file is
 found, or the selected file cannot be read or parsed, the checker silently uses
